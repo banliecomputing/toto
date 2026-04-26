@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aplikasi Data Tabel</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .page-transition { transition: opacity 0.3s ease, transform 0.3s ease; }
+        .page-hidden { opacity: 0; transform: scale(0.95); pointer-events: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        .page-active { opacity: 1; transform: scale(1); position: relative; height: 100%; z-index: 1; }
+        
+        /* Tema Gelap Elegan untuk Aplikasi Data */
+        body { background-color: #0f172a; color: #f8fafc; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        /* Toggle Switch CSS */
+        .toggle-checkbox:checked { right: 0; border-color: #34d399; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #10b981; }
+    </style>
+</head>
+<body class="antialiased overflow-hidden">
+
+    <div class="flex flex-col h-[100dvh] max-w-md mx-auto bg-slate-900 relative shadow-2xl">
+        
+        <!-- Top Navbar (Header) -->
+        <header class="bg-slate-800 text-white px-4 py-4 shadow-[0_4px_20px_rgba(0,0,0,0.3)] z-30 flex justify-between items-center border-b border-slate-700/50 sticky top-0">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-500/20 p-2 rounded-xl border border-emerald-500/30">
+                    <i class="ph-fill ph-chart-bar text-emerald-400 text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base font-bold tracking-wider leading-tight" id="header-title">Live Result</h1>
+                    <p class="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Data Pengeluaran</p>
+                </div>
+            </div>
+            <!-- Tombol Fullscreen -->
+            <button onclick="toggleFullScreen()" class="p-2 text-slate-300 hover:text-emerald-400 transition-colors focus:outline-none rounded-full bg-slate-700/50 hover:bg-slate-700 border border-slate-600" title="Layar Penuh">
+                <i id="fs-icon" class="ph ph-corners-out text-lg"></i>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-hidden relative bg-slate-950">
+            
+            <!-- HALAMAN 1: LIVE DASHBOARD -->
+            <div id="page-live" class="page-transition page-active flex flex-col h-full overflow-y-auto no-scrollbar p-4 pb-24">
+                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 mb-5 flex items-center gap-3">
+                    <span class="relative flex h-3 w-3 shrink-0">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    <p class="text-xs text-emerald-400 font-medium leading-relaxed">Menarik data dari server. Buka tab ini untuk menyegarkan angka terbaru.</p>
+                </div>
+
+                <div id="live-cards-container" class="space-y-4">
+                    <!-- Kartu akan dimuat via JS -->
+                </div>
+            </div>
+
+            <!-- HALAMAN 2: RIWAYAT TABEL DATA -->
+            <div id="page-tabel" class="page-transition page-hidden flex flex-col h-full">
+                <!-- Dropdown Pemilih Pasaran -->
+                <div class="p-4 bg-slate-800 z-10 shadow-md border-b border-slate-700/50">
+                    <select id="pool-selector" onchange="fetchTableData()" class="w-full px-4 py-3 rounded-xl bg-slate-900 text-white border border-slate-600 focus:ring-2 focus:ring-emerald-500 outline-none appearance-none font-semibold text-center shadow-inner">
+                        <option value="">-- Pilih Pasaran Untuk Dilihat --</option>
+                        <!-- Opsi akan dimuat via JS -->
+                    </select>
+                </div>
+
+                <!-- Kontainer Data Tabel (Hasil Scrape) -->
+                <div class="flex-1 relative w-full h-full overflow-hidden flex flex-col">
+                    <div id="data-loading" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 hidden z-10 bg-slate-950/80 backdrop-blur-sm">
+                        <i class="ph ph-spinner-gap animate-spin text-4xl mb-2 text-emerald-500"></i>
+                        <p class="text-sm">Menarik tabel dari server...</p>
+                    </div>
+
+                    <div id="empty-data-msg" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center z-0">
+                        <i class="ph ph-table text-5xl mb-3 opacity-50"></i>
+                        <p id="empty-text">Silakan pilih pasaran di atas untuk memuat riwayat tabel secara penuh.</p>
+                    </div>
+
+                    <div id="data-container" class="flex-1 overflow-auto hidden z-0 no-scrollbar pb-24">
+                        <!-- Tabel yang di-scrape akan dimasukkan ke sini -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- HALAMAN 3: BUKU MIMPI -->
+            <div id="page-bukumimpi" class="page-transition page-hidden flex flex-col h-full bg-slate-900">
+                <div class="p-4 bg-slate-800 z-10 shadow-md">
+                    <div class="relative mb-3">
+                        <i class="ph ph-magnifying-glass absolute left-3 top-3.5 text-slate-400 text-lg"></i>
+                        <input type="text" id="search-mimpi" onkeyup="renderBukuMimpi()" placeholder="Cari mimpi atau angka..." class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900 text-white border border-slate-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-sm transition-all shadow-inner">
+                    </div>
+                    <div class="flex bg-slate-950/80 p-1 rounded-xl">
+                        <button onclick="switchMimpiType('2D')" id="tab-mimpi-2D" class="flex-1 py-2 text-sm font-bold rounded-lg bg-emerald-500 text-slate-900 shadow-sm transition-all">2D</button>
+                        <button onclick="switchMimpiType('3D')" id="tab-mimpi-3D" class="flex-1 py-2 text-sm font-bold rounded-lg text-slate-400 hover:text-white transition-all">3D</button>
+                        <button onclick="switchMimpiType('4D')" id="tab-mimpi-4D" class="flex-1 py-2 text-sm font-bold rounded-lg text-slate-400 hover:text-white transition-all">4D</button>
+                    </div>
+                </div>
+                <div id="buku-mimpi-list" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar pb-24">
+                    <!-- Dimuat dari JS -->
+                </div>
+            </div>
+
+            <!-- HALAMAN 4: PENGATURAN / ADMIN -->
+            <div id="page-admin" class="page-transition page-hidden overflow-y-auto no-scrollbar p-6 pb-24 h-full">
+                <!-- Layar Kunci PIN -->
+                <div id="pin-screen" class="flex flex-col items-center justify-center h-full mt-[-2rem]">
+                    <div class="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-slate-900 border border-slate-700">
+                        <i class="ph-fill ph-lock-key text-5xl text-emerald-400"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-2">Akses Admin</h2>
+                    <p class="text-slate-400 text-sm text-center mb-8 px-4">Masukkan PIN untuk mengelola basis data URL pasaran.</p>
+                    
+                    <input type="password" id="pin-input" placeholder="****" class="w-48 text-center text-3xl tracking-[0.5em] px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 outline-none mb-6 shadow-inner font-mono">
+                    
+                    <button onclick="checkPin()" class="w-48 bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-3.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20">
+                        Buka Kunci
+                    </button>
+                    <p id="pin-error" class="text-red-400 text-sm mt-4 hidden bg-red-500/10 px-4 py-2 rounded-lg border border-red-500/20">PIN salah! Coba lagi.</p>
+                </div>
+
+                <!-- Dashboard Admin -->
+                <div id="admin-dashboard" class="hidden">
+                    <div class="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                        <div>
+                            <h2 class="text-lg font-bold text-emerald-400">Database Pasaran</h2>
+                            <p class="text-xs text-slate-400">Kelola sumber data scraper</p>
+                        </div>
+                        <button onclick="lockAdmin()" class="text-sm bg-slate-900 px-4 py-2 rounded-xl text-slate-300 hover:text-white flex items-center gap-2 border border-slate-600 transition-colors">
+                            <i class="ph ph-lock"></i> Kunci
+                        </button>
+                    </div>
+
+                    <!-- Form Tambah Link (Database Baru) -->
+                    <div class="glass-panel p-5 rounded-2xl mb-8">
+                        <form id="add-link-form" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Nama Pasaran</label>
+                                <input type="text" id="input-name" required placeholder="Cth: Macau 13:00" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">URL Scrape LIVE (Angka Utama)</label>
+                                <input type="url" id="input-url-live" required placeholder="Cth: http://159.65.5.72:369/" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">URL Scrape RIWAYAT (Tabel Lengkap)</label>
+                                <input type="url" id="input-url-history" required placeholder="Cth: http://159.65.5.72:369/data-totomacau/" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner">
+                            </div>
+                            
+                            <!-- Toggle Visibilitas -->
+                            <div class="flex items-center justify-between py-2 border-t border-slate-700/50 mt-2">
+                                <label class="text-sm text-slate-300 font-medium">Tampilkan di Aplikasi?</label>
+                                <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" id="input-visible" checked class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10"/>
+                                    <label for="input-visible" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-600 cursor-pointer"></label>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-3.5 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2 mt-4 shadow-lg shadow-emerald-500/20">
+                                <i class="ph-bold ph-plus"></i> Simpan Database
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Daftar Link -->
+                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <i class="ph ph-database text-lg"></i> Data Tersimpan
+                    </h3>
+                    <div id="links-list" class="space-y-3 pb-8">
+                        <!-- Daftar link dimuat dari JS -->
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- KELOLA BUKU MIMPI (CRUD) -->
+                    <!-- ========================================== -->
+                    <div class="mt-8 border-t border-slate-700/50 pt-8">
+                        <div class="flex justify-between items-center mb-6 bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <div>
+                                <h2 class="text-lg font-bold text-emerald-400">Database Buku Mimpi</h2>
+                                <p class="text-xs text-slate-400">Tambah, Edit, Hapus data Tafsir</p>
+                            </div>
+                        </div>
+
+                        <!-- Form Tambah Buku Mimpi -->
+                        <div class="glass-panel p-5 rounded-2xl mb-8">
+                            <form id="add-mimpi-form" class="space-y-4">
+                                <div class="flex gap-3">
+                                    <div class="w-1/3">
+                                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Tipe</label>
+                                        <select id="input-mimpi-type" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner text-white">
+                                            <option value="2D">2D</option>
+                                            <option value="3D">3D</option>
+                                            <option value="4D">4D</option>
+                                        </select>
+                                    </div>
+                                    <div class="w-2/3">
+                                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Nomor / Angka</label>
+                                        <input type="text" id="input-mimpi-no" required placeholder="Cth: 01" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Arti / Deskripsi</label>
+                                    <textarea id="input-mimpi-desc" required placeholder="Cth: Setan - Bandeng - Obor - Jambu Mente..." class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-600 focus:border-emerald-500 outline-none text-sm shadow-inner resize-none h-20"></textarea>
+                                </div>
+                                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-900 font-bold py-3.5 rounded-xl transition-all active:scale-95 flex justify-center items-center gap-2 mt-4 shadow-lg shadow-emerald-500/20">
+                                    <i class="ph-bold ph-plus"></i> Simpan Arti Mimpi
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Daftar Admin Buku Mimpi -->
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                <i class="ph ph-book-open text-lg"></i> Data Tersimpan
+                            </h3>
+                            <select id="filter-admin-mimpi" onchange="renderAdminMimpi()" class="bg-slate-800 text-emerald-400 text-xs px-3 py-1.5 rounded-lg border border-slate-600 outline-none">
+                                <option value="2D">Lihat 2D</option>
+                                <option value="3D">Lihat 3D</option>
+                                <option value="4D">Lihat 4D</option>
+                            </select>
+                        </div>
+                        <div id="admin-mimpi-list" class="space-y-2 pb-8">
+                            <!-- Daftar buku mimpi dimuat dari JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation Navbar -->
+        <nav class="bg-slate-800 border-t border-slate-700 flex justify-around pb-safe pt-2 px-1 pb-4 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+            <button onclick="switchTab('live')" id="nav-live" class="nav-btn flex-1 flex flex-col items-center p-2 text-emerald-400 transition-colors relative">
+                <i class="ph-fill ph-broadcast text-[26px] mb-1"></i>
+                <span class="text-[10px] font-bold">Live</span>
+            </button>
+            <button onclick="switchTab('tabel')" id="nav-tabel" class="nav-btn flex-1 flex flex-col items-center p-2 text-slate-500 hover:text-emerald-400 transition-colors relative">
+                <i class="ph ph-table text-[26px] mb-1"></i>
+                <span class="text-[10px] font-medium">Tabel</span>
+            </button>
+            <button onclick="switchTab('bukumimpi')" id="nav-bukumimpi" class="nav-btn flex-1 flex flex-col items-center p-2 text-slate-500 hover:text-emerald-400 transition-colors relative">
+                <i class="ph ph-book-open text-[26px] mb-1"></i>
+                <span class="text-[10px] font-medium">Mimpi</span>
+            </button>
+            <button onclick="switchTab('admin')" id="nav-admin" class="nav-btn flex-1 flex flex-col items-center p-2 text-slate-500 hover:text-emerald-400 transition-colors relative">
+                <i class="ph ph-gear-six text-[26px] mb-1"></i>
+                <span class="text-[10px] font-medium">Setelan</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Logika Aplikasi -->
+    <script>
+        // --- KONFIGURASI ---
+        const ADMIN_PIN = "1234";
+
+        // Struktur Database Baru (V2)
+        let pools = JSON.parse(localStorage.getItem('poolDataV2')) || [
+            { 
+                id: 1, 
+                name: "Toto Macau", 
+                urlLive: "http://159.65.5.72:369/", 
+                urlHistory: "http://159.65.5.72:369/data-totomacau/",
+                visible: true
+            }
+        ];
+
+        // --- ELEMEN DOM ---
+        const selectorEl = document.getElementById('pool-selector');
+        const dataContainer = document.getElementById('data-container');
+        const dataLoading = document.getElementById('data-loading');
+        const emptyMsg = document.getElementById('empty-data-msg');
+        const linksListEl = document.getElementById('links-list');
+        const formEl = document.getElementById('add-link-form');
+        const searchMimpiEl = document.getElementById('search-mimpi');
+        const listMimpiEl = document.getElementById('buku-mimpi-list');
+        const liveCardsContainer = document.getElementById('live-cards-container');
+        
+        // Element untuk CRUD Mimpi
+        const formMimpiEl = document.getElementById('add-mimpi-form');
+        const adminMimpiListEl = document.getElementById('admin-mimpi-list');
+        const filterAdminMimpiEl = document.getElementById('filter-admin-mimpi');
+
+        // Data Buku Mimpi Lengkap (Di-load dari LocalStorage atau Data Default)
+        let dataBukuMimpi = JSON.parse(localStorage.getItem('bukuMimpiDataV1')) || {
+            '2D': [
+                { id: 1000, no: "00", desc: "Penyair - Tapir - Sempritan - Rembulan - Tanggalan - Kumbo KARN0" },
+                { id: 1001, no: "01", desc: "Setan - Bandeng - Obor - Jambu Mente - Tangan - Betara Kala" },
+                { id: 1002, no: "02", desc: "Sarjana - Bekicot - Loncat Tinggi - Wortel - Sandal - Betara Brahma" },
+                { id: 1003, no: "03", desc: "Orang Mati - Angsa - Lompat Galah - Sawi - Kaki - Cemburu - Subali" },
+                { id: 1004, no: "04", desc: "Kwan Im - Merak - Lompat Jauh - Kangkung - Balon - Dewi Ratih" },
+                { id: 1005, no: "05", desc: "Kepala Rampok - Singa - Loncat Indah - Kayu Manis - Kereta Api - Garu Langit" },
+                { id: 1006, no: "06", desc: "Dewi Bulan - Kelinci - Renang - Kapas - Boneka - Dewi Sri" },
+                { id: 1007, no: "07", desc: "Pelayan - Babi - Perahu Layar - Bawang - Pancing - Sulastri" },
+                { id: 1008, no: "08", desc: "Maling Kecil - Macan - Motor Boat - Kecubung - Pasar - T. Mariam" },
+                { id: 1009, no: "09", desc: "Jendral - Kerbau - Mendayung - Kates - Jala - Gadis - Bima" },
+                { id: 1010, no: "10", desc: "Kelenteng - Kelabang - Menyelam - Kelapa - Bir - S. Pemuja" },
+                { id: 1011, no: "11", desc: "Menteri Serakah - Anjing - Lari Cepat - Sapu - Kipas - Sengkuni" },
+                { id: 1012, no: "12", desc: "Penasihat Perang - Kuda - Lari Gawang - Lemon - Bola Lampu - Wibisana" },
+                { id: 1013, no: "13", desc: "Penjaga Pintu - Gajah - Lari Estafet - Kipas Angin - Cuci Rambut - Prabukesa" },
+                { id: 1014, no: "14", desc: "Potong Babi - Onta - Tolak Peluru - Jembatan - Spet - Jaya Langsuan" },
+                { id: 1015, no: "15", desc: "Hakim - Tikus - Lempar Martil - Kantor Pos - Sekrup - Kresna" },
+                { id: 1016, no: "16", desc: "Sakit Gudig - Tawon - Lempar Cakram - Surat - Nanas - Jembawan" },
+                { id: 1017, no: "17", desc: "Pemadat - Bangau - Lempar Lembing - Durian - Telepon - Buto Terong" },
+                { id: 1018, no: "18", desc: "Kas Uang - Kucing - Polo Air - Lombok - Kantor Polisi - Bisma" },
+                { id: 1019, no: "19", desc: "Pelacur Kelas Tinggi - Kupu Kupu - Sepak Bola - Srikaya - Ban Sepeda - Banowati" },
+                { id: 1020, no: "20", desc: "Istri Sejati - Lalat - Volley Ball - Palu - Ban Mobil - Setiawati" },
+                { id: 1021, no: "21", desc: "Pelacur Umum - Walet - Bulutangkis - Permen - Kapak - Lesmanawati" },
+                { id: 1022, no: "22", desc: "Peti Mati - Capung - Tenis - Terong - Harmonika - Arjuna - Sembadra" },
+                { id: 1023, no: "23", desc: "Setan Gantung - Kera - Bola Basket - Pisang - Piano - Wilkampana" },
+                { id: 1024, no: "24", desc: "Sumber Air - Katak - Tenis Meja - Sikat Gigi - Padi - Dewa Ruci" },
+                { id: 1025, no: "25", desc: "Menantu Raja - Rajawali - Baseball - Jagung - Tapal Gigi - Kangsa Dewa" },
+                { id: 1026, no: "26", desc: "Raja - Naga - Hockey - Ganggang - Mesin Jahit - Samiaji" },
+                { id: 1027, no: "27", desc: "Wanita Cantik - Kura Kura - Bola Sodok - Sabun Bubuk - Otak - Dewi Supraba" },
+                { id: 1028, no: "28", desc: "Pencari Kayu - Ayam - Menembak - Tomat - Jarum - Nakula" },
+                { id: 1029, no: "29", desc: "Pendeta Sakti - Belut - Panahan - Kursi - Koran - Sidiwacana" },
+                { id: 1030, no: "30", desc: "Nelayan - Ikan Mas - Angkat Besi - Belimbing - WC - Nagatatmala" },
+                { id: 1031, no: "31", desc: "Anggota Kelamin - Udang - Senam - Cacing Pita - Sangkar Burung - Yuyu Rumpung" },
+                { id: 1032, no: "32", desc: "Ahli Nujum - Ular - Yudo - Kamar Mandi - Tali - Abiyasa" },
+                { id: 1033, no: "33", desc: "Pengemis - Laba Laba - Gulat - Gigi - Sabun - Petruk" },
+                { id: 1034, no: "34", desc: "Orang Buta - Rusa - Silat - Jamu - Paru Paru - Destarata" },
+                { id: 1035, no: "35", desc: "Wanita - Kambing - Tinju - Lambung - Jalan Jalan - Drupadi" },
+                { id: 1036, no: "36", desc: "Pendeta Wanita - Musang - Balap Sepeda - Manggis - Apotik - Sayempraba" },
+                { id: 1037, no: "37", desc: "Orang Bongkok - Ikan Gabus - Balap Mobil - Anggur - BH - Truk - Gareng" },
+                { id: 1038, no: "38", desc: "Putra Raja - Cendrawasih - Balap Sepeda Motor - Engsel - Drum - Untari" },
+                { id: 1039, no: "39", desc: "Kekasih - Kalajengking - Balap Kuda - Topi - Bemo - Narasuma" },
+                { id: 1040, no: "40", desc: "Penolong - Gelatik - Golf - Tang - Peci - Widura" },
+                { id: 1041, no: "41", desc: "Pahlawan - Kepiting - Lompat Kuda - Lilin - Sabuk - Warsaya" },
+                { id: 1042, no: "42", desc: "Jejaka Tua - Buaya - Gerak Jalan - Catur - Dokter - Lesmana Widakta" },
+                { id: 1043, no: "43", desc: "Janda Muda - Ikan Suro - Anggar - Mawar - Grendel - Sumbadra" },
+                { id: 1044, no: "44", desc: "Berandal - Badak - Ski Air - Seruling - Sisir - Citraksa" },
+                { id: 1045, no: "45", desc: "Pengembara - Banteng - Terbang Layang - Kendi - Tas - Rama" },
+                { id: 1046, no: "46", desc: "Nenek Moyang - Orang Utan - Terjun Bebas - Sikat - Toko - Hyang Wenang" },
+                { id: 1047, no: "47", desc: "Banci - Zebra - Upacara Bendera - Tangga - Hotel - Stuna" },
+                { id: 1048, no: "48", desc: "Si Ceroboh - Landak - Main Catur - Garuk - Gedung Bioskop - Dasamuka" },
+                { id: 1049, no: "49", desc: "Drakula - Kelelawar - Mendaki Gunung - Cetok - Rok - Betari Durga" },
+                { id: 1050, no: "50", desc: "Orang Eskimo - Beruang - Pembawa Obor - Pacul - Guru - Bagong" },
+                { id: 1051, no: "51", desc: "Ahli Filsafat - Kerang - Patelele - Tebu - Celana - Narodo" },
+                { id: 1052, no: "52", desc: "Raja Laut - Ikan Paus - Main Tali - Matahari - Dompet - Antasena" },
+                { id: 1053, no: "53", desc: "Penjual Silat - Ikan Duri - Akrobat - Rambutan - Taxi - Abimanyu" },
+                { id: 1054, no: "54", desc: "Raja Hutam - Monyet - Halter - Sepatu - Kursi Malas - Hanoman" },
+                { id: 1055, no: "55", desc: "Pertapa - Kangguru - Kasti - Gelang - Kemaron - Rd Seta" },
+                { id: 1056, no: "56", desc: "Budak - Ikan Duyung - Ringen - Bengkung - Kenanga - Cikar - Limbuk" },
+                { id: 1057, no: "57", desc: "Anak Sakti - Ulat Sutera - Layang Layang - Sepatu - Ranjang - Gatotkaca" },
+                { id: 1058, no: "58", desc: "Penari - Cumi Cumi - Main Kelereng - Rumah - Sekolahan - Selir" },
+                { id: 1059, no: "59", desc: "Putra Raja - Burung Kakak Tua - Dakon - Kedondong - Jam Dinding - Kresna" },
+                { id: 1060, no: "60", desc: "Kepala Polisi - Cecak - Karambol - Delima - Handuk - Sentiyaki" },
+                { id: 1061, no: "61", desc: "Pedagang - Kecoak - Gendongan - Kacamata - Buku - Baladewa" },
+                { id: 1062, no: "62", desc: "Pagoda - Walang Kadung - Petan - Termos - Selendang Pelangi - Candi Sapta Arga" },
+                { id: 1063, no: "63", desc: "Pendekar Wanita - Kumbang - Treksando - Bantal - Jendela - Larasati" },
+                { id: 1064, no: "64", desc: "Dewa Uang - Kuda Laut - Bandulan - Apel - Guling - Betara Indra" },
+                { id: 1065, no: "65", desc: "Raja Setan - Ikan Hiu - Kayang - Klompen - Petromak - Kala Srenggi" },
+                { id: 1066, no: "66", desc: "Dewa Bumi - Jerapah - Sawatan - Sukun - Gelas - Anta Boga" },
+                { id: 1067, no: "67", desc: "Penjual Daging - Burung Onta - Engrang - Sendok - Korek Api - Abilawa" },
+                { id: 1068, no: "68", desc: "Pembuat Pedang - Burung Hantu - Panjat Pinang - Pisau - Garpu - Cepot" },
+                { id: 1069, no: "69", desc: "Pencari Jejak - Mimi - Engkleh - Gunting - Gunung - Antareja" },
+                { id: 1070, no: "70", desc: "Panglima - Keledai - Tarik Tambang - Lampu Minyak - Rumah Makan - D. Karno" },
+                { id: 1071, no: "71", desc: "Pemburu - Macan Tutul - Lempar Karet - Sumur - Baju - Pandu" },
+                { id: 1072, no: "72", desc: "Dewa Langit - Ikan Dorang - Ik Ol - Kran Air - Arloji - Betara Guru" },
+                { id: 1073, no: "73", desc: "Tuan Tanah - Semut - Tulupan - Anting Anting - Bintang - Dursasana" },
+                { id: 1074, no: "74", desc: "Bajak Laut - Pinguin - Setipan - Gentong - Radio - Indrajit" },
+                { id: 1075, no: "75", desc: "Suami Istri - Bebek - Balapan Lari - Nangka - Lemari - Ratih & Kamajaya" },
+                { id: 1076, no: "76", desc: "Jendral Wanita - Nyamuk - Teplekan - Mata - Timbangan - Srikandi" },
+                { id: 1077, no: "77", desc: "Walikota - Penyu - Bekel - Cincin - Payung - Togog" },
+                { id: 1078, no: "78", desc: "Orang Kaya - Ikan Gergaji - Balap Becak - Semangka - Wajan - Lesmana Mandrakumara" },
+                { id: 1079, no: "79", desc: "Jendral Serakah - Orong Orong - Okol - Jeruk Bali - Kompor - Suyudana" },
+                { id: 1080, no: "80", desc: "Kepala Desa - Bajing - Apolo - Pensil - Cerkak - Sirawat" },
+                { id: 1081, no: "81", desc: "Penipu - Kancil - Damdaman - Hidung - Cangkir - Aswatama" },
+                { id: 1082, no: "82", desc: "Gembala - Kuda Nil - As - Telinga - Berlian - Udawa" },
+                { id: 1083, no: "83", desc: "Ibu Suri - Ikan Layur - Dadu - Kumis - Pipa - Dewi Kunti" },
+                { id: 1084, no: "84", desc: "Budha - Kalkun - Salto - Mulut - Kacang Tanah - Bagaspati" },
+                { id: 1085, no: "85", desc: "Penyihir - Jangkrik - Latihan Hansip - Teratai - Pintu - Sarpa Kenaka" },
+                { id: 1086, no: "86", desc: "Pencabut Nyawa - Ikan Sampan - Dapat Lencana - Gerak Badan - Salak - Rokok - Yamadipati" },
+                { id: 1087, no: "87", desc: "Orang Gila - Betet - Kerja Bakti - Botol - Toilet - Burisrawa" },
+                { id: 1088, no: "88", desc: "Dewi Mega - Bawang - Balap Karung - Jeruk Manis - Piring - Meluku - Wilutama" },
+                { id: 1089, no: "89", desc: "Pemabuk - Ikan Bendera - Setopan - Jeruk Keprok - Ember - Bomanarakasura" },
+                { id: 1090, no: "90", desc: "Tawanan - Trenggiling - Perempatan Jalan - Pil - Ke Pasar - Shinta" },
+                { id: 1091, no: "91", desc: "Siluman Air - Serigala - Ambulans - Bambu - Toples - Witaksini" },
+                { id: 1092, no: "92", desc: "Pendekar Kipas Besi - Ikan Tenggiri - Garis Finish - Apokat - Sarung - Siti Sundari" },
+                { id: 1093, no: "93", desc: "Penjilat - Babi Hutan - Perahu Layar - Kaos Kaki - Lapangan - Durna" },
+                { id: 1094, no: "94", desc: "Kwan Kong - Ikan Kakap - Pemandian - Jambu - Pen - P. Salya" },
+                { id: 1095, no: "95", desc: "Petani - Burung Perkutut - Jalan Raya - Kunci - Pisau Cukur - Irawan" },
+                { id: 1096, no: "96", desc: "Prajurit - Ikan Nus - Laut - Mangga - Minyak Angin - Citrayuda" },
+                { id: 1097, no: "97", desc: "Raksasa - Tokek - Kali Brantas - Sirsak - Lemari Es - Prahasta" },
+                { id: 1098, no: "98", desc: "Penjaga Malam - Tongkol - TV - Lengkeng - Kecelakaan - Trijata" },
+                { id: 1099, no: "99", desc: "Hidung Belang - Burung Jalak - Bayi - Kodak - Meja - Arjuna" }
+            ],
+            '3D': [
+                { id: 2001, no: "001 - 045", desc: "Langit - Macan Tutul - Batu - Jam Dinding" },
+                { id: 2002, no: "046 - 090", desc: "Gunung - Harimau - Kayu - Kursi" },
+                { id: 2003, no: "091 - 135", desc: "Lautan - Gajah - Besi - Meja" },
+                { id: 2004, no: "136 - 180", desc: "Hutan - Badak - Tanah - Lemari" },
+                { id: 2005, no: "181 - 225", desc: "Sungai - Singa - Air - Pintu" }
+            ],
+            '4D': [
+                { id: 3001, no: "0001 - 2001", desc: "Penjaga Hutan - Orang Melayu - Orang India - Pengurus" },
+                { id: 3002, no: "0002 - 2002", desc: "Pekerja Kampong - Orang Dayak - Penjaga Candi - Pemahat" },
+                { id: 3003, no: "0003 - 2003", desc: "Pedagang Asongan - Pengamen - Pelacur - Penjual Togel" }
+            ]
+        };
+        let currentMimpiType = '2D';
+
+        // Inisialisasi awal
+        renderDropdown();
+        renderAdminList();
+        renderBukuMimpi();
+        renderAdminMimpi(); // Load daftar CRUD Mimpi
+        fetchAllLiveResults(); 
+
+        // --- NAVIGASI ---
+        function switchTab(tabName) {
+            document.querySelectorAll('.page-transition').forEach(page => {
+                page.classList.remove('page-active');
+                page.classList.add('page-hidden');
+            });
+
+            document.getElementById('nav-live').innerHTML = `<i class="ph ph-broadcast text-[26px] mb-1"></i><span class="text-[10px] font-medium">Live</span>`;
+            document.getElementById('nav-tabel').innerHTML = `<i class="ph ph-table text-[26px] mb-1"></i><span class="text-[10px] font-medium">Tabel</span>`;
+            document.getElementById('nav-bukumimpi').innerHTML = `<i class="ph ph-book-open text-[26px] mb-1"></i><span class="text-[10px] font-medium">Mimpi</span>`;
+            document.getElementById('nav-admin').innerHTML = `<i class="ph ph-gear-six text-[26px] mb-1"></i><span class="text-[10px] font-medium">Setelan</span>`;
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-emerald-400');
+                btn.classList.add('text-slate-500');
+            });
+
+            const activePage = document.getElementById(`page-${tabName}`);
+            activePage.classList.remove('page-hidden');
+            activePage.classList.add('page-active');
+
+            const activeBtn = document.getElementById(`nav-${tabName}`);
+            activeBtn.classList.remove('text-slate-500');
+            activeBtn.classList.add('text-emerald-400');
+            
+            if(tabName === 'live') {
+                activeBtn.innerHTML = `<i class="ph-fill ph-broadcast text-[26px] mb-1"></i><span class="text-[10px] font-bold">Live</span>`;
+                document.getElementById('header-title').innerText = 'Live Result';
+                fetchAllLiveResults();
+            } else if(tabName === 'tabel') {
+                activeBtn.innerHTML = `<i class="ph-fill ph-table text-[26px] mb-1"></i><span class="text-[10px] font-bold">Tabel</span>`;
+                document.getElementById('header-title').innerText = 'Data Tabel';
+            } else if(tabName === 'bukumimpi') {
+                activeBtn.innerHTML = `<i class="ph-fill ph-book-open text-[26px] mb-1"></i><span class="text-[10px] font-bold">Mimpi</span>`;
+                document.getElementById('header-title').innerText = 'Buku Mimpi';
+            } else {
+                activeBtn.innerHTML = `<i class="ph-fill ph-gear-six text-[26px] mb-1"></i><span class="text-[10px] font-bold">Setelan</span>`;
+                document.getElementById('header-title').innerText = 'Database Admin';
+                if(!document.getElementById('pin-screen').classList.contains('hidden')) {
+                    setTimeout(() => document.getElementById('pin-input').focus(), 100);
+                }
+            }
+        }
+
+        // --- SISTEM PROXY SCRAPER YANG DIPERKUAT ---
+        async function robustFetch(url) {
+            // Daftar proxy yang lebih banyak untuk bypass pemblokiran HTTP IP
+            const proxies = [
+                { url: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, type: 'json' },
+                { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, type: 'raw' },
+                { url: `https://corsproxy.io/?${encodeURIComponent(url)}`, type: 'raw' }
+            ];
+
+            let htmlContent = "";
+            let errorLog = "";
+
+            for (let proxy of proxies) {
+                try {
+                    const response = await fetch(proxy.url, { timeout: 10000 }); // 10 detik timeout
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
+                    if (proxy.type === 'json') {
+                        const data = await response.json();
+                        if (data.contents) { htmlContent = data.contents; break; }
+                    } else {
+                        htmlContent = await response.text();
+                        if (htmlContent) break;
+                    }
+                } catch (e) { 
+                    errorLog += `[Proxy gagal]: ${e.message} `;
+                }
+            }
+
+            if (!htmlContent) throw new Error('Semua proxy diblokir / timeout. Pastikan server web aktif.');
+            return htmlContent;
+        }
+
+        // --- LOGIKA HALAMAN 1: LIVE DASHBOARD ---
+        async function fetchAllLiveResults() {
+            liveCardsContainer.innerHTML = '';
+            
+            // Hanya ambil pasaran yang visibilitasnya = true
+            const activePools = pools.filter(p => p.visible !== false);
+
+            if(activePools.length === 0) {
+                liveCardsContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center text-slate-500 py-10 text-center bg-slate-800/50 rounded-2xl border border-slate-700 border-dashed">
+                        <i class="ph ph-database text-5xl mb-3 opacity-50"></i>
+                        <p class="text-sm px-4">Belum ada pasaran aktif. Tambahkan di menu Setelan.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            for (let pool of activePools) {
+                const card = document.createElement('div');
+                card.id = `live-card-${pool.id}`;
+                card.className = "bg-slate-800 rounded-xl border border-slate-700 shadow-lg relative overflow-hidden flex flex-col";
+                card.innerHTML = `
+                    <div class="bg-slate-900/50 px-4 py-3 border-b border-slate-700/50 flex justify-between items-center">
+                        <h3 class="font-bold text-white text-sm uppercase tracking-wider truncate">${pool.name}</h3>
+                        <i class="ph ph-spinner-gap animate-spin text-emerald-500 text-lg"></i>
+                    </div>
+                    <div class="p-6 text-center flex flex-col justify-center items-center">
+                         <div class="w-full h-10 bg-slate-700/50 animate-pulse rounded-md mb-2"></div>
+                    </div>
+                `;
+                liveCardsContainer.appendChild(card);
+                
+                fetchSingleLiveResult(pool, card);
+            }
+        }
+
+        async function fetchSingleLiveResult(pool, cardElement) {
+            try {
+                if(!pool.urlLive) throw new Error('URL Live kosong');
+                const htmlContent = await robustFetch(pool.urlLive);
+
+                const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+                const table = doc.querySelector('table');
+
+                if (table) {
+                    const rows = table.querySelectorAll('tr');
+                    let dataRow = null;
+                    
+                    // Mencari baris data (bukan header)
+                    for(let r of rows) {
+                        if(r.querySelector('td')) { dataRow = r; break; }
+                    }
+
+                    if(dataRow) {
+                        const tds = Array.from(dataRow.querySelectorAll('td'))
+                                        .map(td => td.innerText.trim().replace(/\n/g, ' '))
+                                        .filter(text => text !== '');
+                        
+                        if (tds.length === 0) throw new Error("Format tabel tidak dikenali");
+
+                        let resultNum = tds.length === 1 ? tds[0] : tds.pop();
+                        let meta = tds.join(' • '); 
+
+                        cardElement.innerHTML = `
+                            <div class="bg-slate-900/50 px-4 py-3 border-b border-slate-700/50 flex justify-between items-center">
+                                <h3 class="font-bold text-white text-sm uppercase tracking-wider truncate mr-2">${pool.name}</h3>
+                                <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-bold border border-emerald-500/30 animate-pulse shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.3)]">LIVE</span>
+                            </div>
+                            <div class="p-6 text-center relative overflow-hidden">
+                                <i class="ph-fill ph-chart-line-up absolute -right-4 -bottom-4 text-7xl text-slate-700/30"></i>
+                                <div class="text-4xl font-black text-emerald-400 tracking-[0.2em] drop-shadow-[0_0_12px_rgba(52,211,153,0.4)] relative z-10">${resultNum || '-'}</div>
+                                <div class="text-[10px] text-slate-400 font-medium mt-3 uppercase tracking-widest relative z-10">${meta}</div>
+                            </div>
+                            <div class="border-t border-slate-700/50 bg-slate-800/80 hover:bg-slate-700 transition-colors cursor-pointer" onclick="openTableData('${pool.id}')">
+                                <div class="w-full py-3 text-xs text-emerald-500/80 font-semibold flex items-center justify-center gap-2">
+                                    <i class="ph ph-table text-lg"></i> Buka Riwayat Tabel Lengkap
+                                </div>
+                            </div>
+                        `;
+                    } else { throw new Error("Data tidak ditemukan di tabel"); }
+                } else { throw new Error("Tabel tidak ditemukan di situs"); }
+            } catch (error) {
+                cardElement.innerHTML = `
+                    <div class="bg-slate-900/50 px-4 py-3 border-b border-slate-700/50 flex justify-between items-center">
+                        <h3 class="font-bold text-white text-sm uppercase tracking-wider">${pool.name}</h3>
+                    </div>
+                    <div class="p-6 text-center text-xs text-red-400 flex flex-col items-center justify-center gap-2">
+                        <i class="ph-fill ph-warning-circle text-3xl opacity-80 mb-1"></i>
+                        <span>Gagal: ${error.message}</span>
+                        <span class="text-[9px] text-slate-500">Periksa link / server down</span>
+                    </div>
+                `;
+            }
+        }
+
+        function openTableData(poolId) {
+            switchTab('tabel');
+            selectorEl.value = poolId; // Memilih ID di dropdown
+            fetchTableData();
+        }
+
+        // --- LOGIKA HALAMAN 2: RIWAYAT TABEL ---
+        function renderDropdown() {
+            const currentVal = selectorEl.value;
+            selectorEl.innerHTML = '<option value="">-- Pilih Pasaran Untuk Dilihat --</option>';
+            
+            // Tampilkan semua di dropdown tabel meskipun disembunyikan di dashboard live
+            pools.forEach(pool => {
+                const opt = document.createElement('option');
+                opt.value = pool.id;
+                opt.textContent = pool.name;
+                selectorEl.appendChild(opt);
+            });
+            if(pools.find(p => p.id == currentVal)) selectorEl.value = currentVal;
+        }
+
+        async function fetchTableData() {
+            const poolId = selectorEl.value;
+            if (!poolId) {
+                document.getElementById('data-container').classList.add('hidden');
+                document.getElementById('empty-data-msg').classList.remove('hidden');
+                return;
+            }
+
+            const targetPool = pools.find(p => p.id == poolId);
+            if(!targetPool || !targetPool.urlHistory) return;
+
+            document.getElementById('empty-data-msg').classList.add('hidden');
+            document.getElementById('data-container').classList.add('hidden');
+            document.getElementById('data-loading').classList.remove('hidden');
+
+            try {
+                const htmlContent = await robustFetch(targetPool.urlHistory);
+
+                const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+                const table = doc.querySelector('table');
+
+                if (table) {
+                    table.removeAttribute('style'); table.removeAttribute('width'); table.removeAttribute('border');
+                    table.className = "min-w-full text-sm text-slate-300 border-collapse whitespace-nowrap bg-slate-900";
+                    
+                    table.querySelectorAll('th').forEach(th => {
+                        th.className = "px-4 py-4 bg-emerald-600/20 text-emerald-400 font-bold border-b-2 border-emerald-500/30 uppercase text-xs text-center sticky top-0 z-10 shadow-md whitespace-nowrap backdrop-blur-md";
+                    });
+
+                    table.querySelectorAll('td').forEach(td => {
+                        td.className = "px-4 py-3 border-b border-slate-700/50 text-center font-medium";
+                    });
+
+                    table.querySelectorAll('tbody tr, tr:not(:first-child)').forEach((tr, index) => {
+                        tr.className = index % 2 === 0 ? 'bg-slate-800/40 hover:bg-slate-700 transition-colors' : 'bg-slate-800 hover:bg-slate-700 transition-colors';
+                    });
+
+                    dataContainer.innerHTML = '';
+                    const tableWrapper = document.createElement('div');
+                    tableWrapper.className = "w-full overflow-x-auto rounded-t-xl border border-slate-700/50 shadow-xl";
+                    tableWrapper.appendChild(table);
+                    
+                    dataContainer.appendChild(tableWrapper);
+                    dataLoading.classList.add('hidden');
+                    dataContainer.classList.remove('hidden');
+                } else {
+                    throw new Error('Tabel tidak ditemukan di halaman riwayat.');
+                }
+            } catch (error) {
+                dataLoading.classList.add('hidden');
+                document.getElementById('empty-data-msg').classList.remove('hidden');
+                document.getElementById('empty-data-msg').innerHTML = `<i class="ph-fill ph-warning-octagon text-5xl mb-3 opacity-50 text-red-400"></i><p class="text-sm px-4">Gagal memuat: ${error.message}</p>`;
+            }
+        }
+
+        // --- LOGIKA HALAMAN 3 & 4 BUKU MIMPI & ADMIN ---
+        function switchMimpiType(type) {
+            currentMimpiType = type;
+            ['2D', '3D', '4D'].forEach(t => {
+                const btn = document.getElementById(`tab-mimpi-${t}`);
+                if(t === type) btn.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-emerald-500 text-slate-900 shadow-sm transition-all";
+                else btn.className = "flex-1 py-2 text-sm font-bold rounded-lg text-slate-400 hover:text-white transition-all";
+            });
+            renderBukuMimpi();
+        }
+
+        function renderBukuMimpi() {
+            const query = searchMimpiEl.value.toLowerCase();
+            const data = dataBukuMimpi[currentMimpiType];
+            listMimpiEl.innerHTML = '';
+
+            const filteredData = data.filter(item => item.no.toLowerCase().includes(query) || item.desc.toLowerCase().includes(query));
+
+            if(filteredData.length === 0) {
+                listMimpiEl.innerHTML = `<div class="flex flex-col items-center justify-center text-slate-500 py-10 text-center"><i class="ph ph-magnifying-glass text-4xl mb-2 opacity-50"></i><p class="text-sm">Tidak ditemukan.</p></div>`;
+                return;
+            }
+
+            // Urutkan berdasarkan nomor sebelum dirender
+            filteredData.sort((a, b) => a.no.localeCompare(b.no));
+
+            filteredData.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center shadow-sm";
+                card.innerHTML = `<div class="bg-slate-900 text-emerald-400 font-bold text-lg px-4 py-2 rounded-lg border border-slate-700/50 min-w-[4.5rem] text-center shrink-0 shadow-inner">${item.no}</div><div class="text-sm text-slate-300 leading-relaxed">${item.desc}</div>`;
+                listMimpiEl.appendChild(card);
+            });
+        }
+
+        function checkPin() {
+            if (document.getElementById('pin-input').value === ADMIN_PIN) {
+                document.getElementById('pin-screen').classList.add('hidden');
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                document.getElementById('pin-input').value = '';
+                document.getElementById('pin-error').classList.add('hidden');
+            } else {
+                document.getElementById('pin-error').classList.remove('hidden');
+            }
+        }
+
+        // --- SISTEM DRAWER / LACI ADMIN ---
+        function openDrawer(drawerId) {
+            const drawer = document.getElementById(drawerId);
+            drawer.classList.remove('translate-x-full');
+            drawer.classList.add('translate-x-0');
+        }
+
+        function closeDrawer(drawerId) {
+            const drawer = document.getElementById(drawerId);
+            drawer.classList.remove('translate-x-0');
+            drawer.classList.add('translate-x-full');
+        }
+
+        function lockAdmin() {
+            // Tutup semua laci (drawer) yang mungkin terbuka
+            closeDrawer('drawer-pasaran');
+            closeDrawer('drawer-mimpi');
+            
+            // Tampilkan kembali layar PIN, sembunyikan dashboard menu
+            setTimeout(() => {
+                document.getElementById('pin-screen').classList.remove('hidden');
+                document.getElementById('admin-dashboard').classList.add('hidden');
+            }, 300); // Tunggu animasi drawer tertutup
+        }
+
+        document.getElementById('pin-input').addEventListener('keypress', function (e) { if (e.key === 'Enter') checkPin(); });
+
+        formEl.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const newPool = { 
+                id: Date.now(), 
+                name: document.getElementById('input-name').value, 
+                urlLive: document.getElementById('input-url-live').value,
+                urlHistory: document.getElementById('input-url-history').value,
+                visible: document.getElementById('input-visible').checked
+            };
+
+            pools.push(newPool);
+            saveData();
+            formEl.reset();
+            fetchAllLiveResults(); 
+        });
+
+        function toggleVisibility(id) {
+            const pool = pools.find(p => p.id === id);
+            if(pool) {
+                pool.visible = !pool.visible;
+                saveData();
+                fetchAllLiveResults(); // Segarkan live dashboard
+            }
+        }
+
+        function renderAdminList() {
+            linksListEl.innerHTML = '';
+            if(pools.length === 0) {
+                linksListEl.innerHTML = '<p class="text-slate-500 text-sm text-center py-6 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">Database kosong.</p>';
+                return;
+            }
+            pools.forEach(pool => {
+                const isVisible = pool.visible !== false; // Default true jika undefined
+                const visibilityIcon = isVisible ? 'ph-eye text-emerald-400' : 'ph-eye-slash text-slate-500';
+                
+                const item = document.createElement('div');
+                item.className = `bg-slate-800 p-4 rounded-xl border ${isVisible ? 'border-emerald-500/30' : 'border-slate-700 opacity-70'} flex flex-col gap-3 relative`;
+                item.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="pr-8">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                ${pool.name}
+                                ${!isVisible ? '<span class="text-[8px] bg-slate-700 px-2 py-0.5 rounded text-slate-400">Tersembunyi</span>' : ''}
+                            </h4>
+                        </div>
+                        <div class="flex gap-2 absolute top-4 right-4">
+                            <button onclick="toggleVisibility(${pool.id})" class="p-1.5 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors" title="Tampil/Sembunyikan di Live Dashboard">
+                                <i class="ph ${visibilityIcon} text-lg"></i>
+                            </button>
+                            <button onclick="deletePool(${pool.id})" class="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors" title="Hapus Permanen">
+                                <i class="ph ph-trash text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-[10px] space-y-1 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
+                        <p class="text-slate-400 truncate"><span class="text-emerald-500 font-bold mr-1">L:</span> ${pool.urlLive}</p>
+                        <p class="text-slate-400 truncate"><span class="text-emerald-500 font-bold mr-1">R:</span> ${pool.urlHistory}</p>
+                    </div>
+                `;
+                linksListEl.appendChild(item);
+            });
+        }
+
+        function deletePool(id) {
+            if(confirm('Hapus pasaran ini dari database?')) {
+                pools = pools.filter(p => p.id !== id);
+                saveData();
+                fetchAllLiveResults(); 
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('poolDataV2', JSON.stringify(pools));
+            renderAdminList();
+            renderDropdown();
+        }
+
+        // --- SISTEM CRUD BUKU MIMPI ---
+        formMimpiEl.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const type = document.getElementById('input-mimpi-type').value;
+            const no = document.getElementById('input-mimpi-no').value;
+            const desc = document.getElementById('input-mimpi-desc').value;
+
+            const newMimpi = { 
+                id: Date.now(), 
+                no: no, 
+                desc: desc 
+            };
+
+            dataBukuMimpi[type].push(newMimpi);
+            saveBukuMimpiData();
+            
+            formMimpiEl.reset();
+            document.getElementById('input-mimpi-type').value = type; // Kembalikan ke tipe terakhir
+            
+            // Tampilkan feedback visual sementara
+            const btn = formMimpiEl.querySelector('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i class="ph-bold ph-check"></i> Tersimpan!`;
+            btn.classList.replace('bg-emerald-500', 'bg-emerald-400');
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.classList.replace('bg-emerald-400', 'bg-emerald-500');
+            }, 1500);
+        });
+
+        function renderAdminMimpi() {
+            const type = filterAdminMimpiEl.value;
+            const data = dataBukuMimpi[type] || [];
+            adminMimpiListEl.innerHTML = '';
+
+            if(data.length === 0) {
+                adminMimpiListEl.innerHTML = `<p class="text-slate-500 text-sm text-center py-6 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">Belum ada data ${type}.</p>`;
+                return;
+            }
+
+            // Urutkan data secara ascending
+            const sortedData = [...data].sort((a, b) => a.no.localeCompare(b.no));
+
+            sortedData.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center gap-3 transition-colors hover:border-slate-600';
+                el.innerHTML = `
+                    <div class="bg-slate-900 text-emerald-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700/50 shrink-0 text-center min-w-[3.5rem] shadow-inner text-sm">
+                        ${item.no}
+                    </div>
+                    <div class="flex-1 text-xs text-slate-300 line-clamp-2">
+                        ${item.desc}
+                    </div>
+                    <button onclick="deleteMimpi('${type}', ${item.id})" class="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-colors shrink-0">
+                        <i class="ph ph-trash text-lg"></i>
+                    </button>
+                `;
+                adminMimpiListEl.appendChild(el);
+            });
+        }
+
+        function deleteMimpi(type, id) {
+            if(confirm('Hapus arti mimpi ini secara permanen?')) {
+                dataBukuMimpi[type] = dataBukuMimpi[type].filter(item => item.id !== id);
+                saveBukuMimpiData();
+            }
+        }
+
+        function saveBukuMimpiData() {
+            localStorage.setItem('bukuMimpiDataV1', JSON.stringify(dataBukuMimpi));
+            renderAdminMimpi();
+            
+            // Langsung update tab buku mimpi jika sedang dibuka
+            if(document.getElementById('page-bukumimpi').classList.contains('page-active')) {
+                renderBukuMimpi();
+            }
+        }
+
+        // --- FITUR FULLSCREEN ---
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => alert(`Gagal: ${err.message}`));
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            const fsIcon = document.getElementById('fs-icon');
+            if (document.fullscreenElement) { fsIcon.classList.remove('ph-corners-out'); fsIcon.classList.add('ph-corners-in'); }
+            else { fsIcon.classList.remove('ph-corners-in'); fsIcon.classList.add('ph-corners-out'); }
+        });
+    </script>
+</body>
+</html>
